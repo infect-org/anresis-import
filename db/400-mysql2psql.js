@@ -16,6 +16,9 @@
                 // nice, both dbs are online
                 this.old = this.old.infect;
                 this.new = this.new.infect;
+
+                this.old.therapy.setReferenceAccessorName('id_diagnosis', 'diagnosis');
+
                 return this.migrate();
             }).then(() => {
                 log.success('imported completed!');
@@ -27,7 +30,6 @@
 
         migrate() {
             log.info('Database loaded, strating migration ....');
-            return this.resistance();
             return this.shapes()
                 .then(() => this.genus())
                 .then(() => this.species())
@@ -37,10 +39,187 @@
                 .then(() => this.substanceClass())
                 .then(() => this.compound())
                 .then(() => this.classResistance())
-                .then(() => this.resistance());
+                .then(() => this.resistance())
+                .then(() => this.drug())
+                .then(() => this.topic())
+                .then(() => this.diagnosis())
+                .then(() => this.therapy());
         }
 
 
+
+
+
+
+
+
+
+
+        therapy() {
+            const query = this.old.therapy('*');
+
+            query.getTherapyLocale('*').fetchLanguage('*');
+            query.getDiagnosis('*').getDiagnosisLocale('*').fetchLanguage('*');
+            query.getCompound('*').getSubstance('*').getSubstanceLocale('*').getLanguage('*');
+
+            return query.find().then((therapies) => {
+                return Promise.all(therapies.map((therapy) => {
+                    let identifier = '';
+
+                    therapy.diagnosis.topic.topicLocale.forEach((locale) => {
+                        if (!identifier || locale.language.iso2.toLowerCase().trim() === 'en') identifier = locale.title.toLowerCase().trim();
+                    });
+
+                    const locales = therapy.therapyLocale.map((locale) => {
+                        return new this.new.therapyLocale({
+                              text: locale.text
+                            , locale: this.new.locale({
+                                alpha2: locale.language.iso2.toLowerCase()
+                            })
+                        })
+                    });
+
+
+                    const compounds = [];
+
+                    therapy.compound.forEach((compound) => {
+                        compounds.push(this.new.compound({
+                            identifier: compound.substance.map((substance) => this.getSubstanceIdentifier(substance)).sort().join('/')
+                        }));
+                    });
+
+                    return new this.new.therapy({
+                          therapyLocale: locales
+                        , diagnosis: this.new.diagnosis({
+                            identifier: identifier
+                        })
+                        , compound: compounds
+                    }).save();
+                }));
+            });
+        }
+
+
+
+
+
+
+
+
+
+
+        diagnosis() {
+            const query = this.old.diagnosis('*');
+
+            query.getDiagnosisLocale('*').fetchLanguage('*');
+            query.getCountry('*');
+            query.getTopic('*').getTopicLocale('*').getLanguage('*');
+            query.getBacteria('*').getSpecies('*').getGenus('*');
+
+            return query.find().then((diagnosiss) => {
+                return Promise.all(diagnosiss.map((diagnosis) => {
+                    let identifier = '';
+
+                    diagnosis.topic.topicLocale.forEach((locale) => {
+                        if (!identifier || locale.language.iso2.toLowerCase().trim() === 'en') identifier = locale.title.toLowerCase().trim();
+                    });
+
+                    const locales = diagnosis.diagnosisLocale.map((locale) => {
+                        return new this.new.diagnosisLocale({
+                              title: locale.title
+                            , description: locale.description
+                            , locale: this.new.locale({
+                                alpha2: locale.language.iso2.toLowerCase()
+                            })
+                        })
+                    });
+
+
+                    const bacteria = [];
+
+                    if (diagnosis.bacteria.length) {
+                        diagnosis.bacteria.forEach((bact) => {
+                            bacteria.push(this.new.bacteria({
+                                species: this.new.species({
+                                    identifier: `${bact.species.genus.name.toLowerCase().trim()} ${bact.species.name.toLowerCase().trim()}`
+                                })
+                            }));
+                        });
+                    }
+
+                    return new this.new.diagnosis({
+                          identifier: identifier
+                        , diagnosisLocale: locales
+                        , country: this.new.country({
+                            alpha2: diagnosis.country.iso2.trim().toLowerCase()
+                        })
+                        , topic: this.new.topic({
+                            identifier: identifier
+                        })
+                        , bacteria: bacteria
+                    }).save();
+                }));
+            });
+        }
+
+
+
+
+
+
+
+
+
+
+        topic() {
+            return this.old.topic('*').getTopicLocale('*').fetchLanguage('*').find().then((topics) => {
+                return Promise.all(topics.map((topic) => {
+                    let identifier = '';
+
+                    const locales = topic.topicLocale.map((locale) => {
+                        if (!identifier || locale.language.iso2.toLowerCase().trim() === 'en') identifier = locale.title.toLowerCase().trim();
+
+                        return new this.new.topicLocale({
+                              name: locale.title
+                            , locale: this.new.locale({
+                                alpha2: locale.language.iso2.toLowerCase()
+                            })
+                        })
+                    });
+
+                    return new this.new.topic({
+                          identifier: identifier
+                        , topicLocale: locales
+                    }).save();
+                }));
+            });
+        }
+
+
+
+
+
+
+
+
+        drug() {
+            return this.old.drug('*').getDrugLocale('*').fetchLanguage('*').getCountry('*').find().then((drugs) => {
+                return Promise.all(drugs.map((drug) => {
+                    const locales = drug.drugLocale.map((locale) => {
+                        return new this.new.drugLocale({
+                              name: locale.name
+                            , locale: this.new.locale({
+                                alpha2: `${locale.language.iso2.toLowerCase()}-${locale.country.iso2.toUpperCase()}`
+                            })
+                        })
+                    });
+
+                    return new this.new.drug({
+                        drugLocale: locales
+                    }).save();
+                }));
+            });
+        }
 
 
 

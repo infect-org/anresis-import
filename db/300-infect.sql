@@ -937,14 +937,11 @@
         create table "therapy" (
               "id" serial not null
             , "id_diagnosis" int not null
-            , "identifier" varchar(50) not null
             , "created" timestamp without time zone not null default now()
             , "updated" timestamp without time zone not null default now()
             , "deleted" timestamp without time zone
             , constraint "therapy_pk"
                 primary key ("id")
-            , constraint "drug_unique_identifer"
-                unique ("identifier")
             , constraint "therapy_fk_diagnosis"
                 foreign key ("id_diagnosis")
                 references "diagnosis" ("id")
@@ -955,7 +952,7 @@
         create table "therapyLocale" (
               "id_therapy" int not null
             , "id_locale" int not null
-            , "name" varchar(100) not null
+            , "text" text not null
             , constraint "therapyLocale_pk"
                 primary key ("id_therapy", "id_locale")
             , constraint "therapyLocale_fk_therapy"
@@ -988,4 +985,6 @@
                 on update cascade
                 on delete restrict
         );
+
+
 
