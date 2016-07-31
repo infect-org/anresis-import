@@ -101,9 +101,9 @@
         create table "bacteria" (
               "id" serial not null
             , "id_species" int not null
-            , "id_shape" int not null
-            , "id_grouping" int not null
-            , "gram" boolean not null
+            , "id_shape" int
+            , "id_grouping" int
+            , "gram" boolean
             , "aerobic" boolean not null
             , "aerobicOptional" boolean not null
             , "anaerobic" boolean not null
@@ -150,13 +150,11 @@
 
         create table "compound" (
               "id" serial not null
-            , "identifier" varchar(100) not null
+            , "identifier" varchar(200)
             , "perOs" boolean not null
             , "intraVenous" boolean not null
             , constraint "compound_pk"
                 primary key ("id")
-            , constraint "compound_unique_identifier"
-                unique ("identifier")
         );
 
         create table "compoundLocale" (
@@ -244,7 +242,6 @@
         create table "substance_substanceClass" (
               "id_substance" int not null
             , "id_substanceClass" int not null
-            , "name" varchar(100) not null
             , constraint "substance_substanceClass_pk"
                 primary key ("id_substanceClass", "id_substance")
             , constraint "substance_substanceClass_fk_substanceClass"
@@ -265,7 +262,6 @@
         create table "substance_compound" (
               "id_substance" int not null
             , "id_compound" int not null
-            , "name" varchar(100) not null
             , constraint "substance_compound_pk"
                 primary key ("id_compound", "id_substance")
             , constraint "substance_compound_fk_compound"
@@ -279,6 +275,37 @@
                 on update cascade
                 on delete restrict
         );
+
+
+
+
+
+        -- autogenerate the compound identifier
+        create function "createCompoundIdentifier"() returns trigger as $$
+            begin
+                update "infect"."compound" set "identifier" = (
+                    select string_agg(t."identifier", '/') "identifier"
+                      from (
+                        select s."identifier",
+                               sc."id_compound"
+                         from "infect"."substance_compound" sc
+                         join "infect"."substance" s
+                           on s."id" = sc."id_substance"
+                        where sc."id_compound" = coalesce(NEW."id_compound", OLD."id_compound")
+                     order by s."identifier") t
+                  group by t."id_compound")
+                where "id" = coalesce(NEW."id_compound", OLD."id_compound");
+
+                return NEW;
+            end;
+        $$ language plpgsql;
+
+
+        create trigger "createCompoundIdentifier"
+            after insert or update or delete on "substance_compound"
+            for each row execute procedure "createCompoundIdentifier"();
+
+
 
 
 
@@ -430,6 +457,7 @@
         insert into "region" ("identifier") values ('switzerland-east');
         insert into "region" ("identifier") values ('switzerland-central');
         insert into "region" ("identifier") values ('switzerland-west');
+        insert into "region" ("identifier") values ('global');
 
 
 
@@ -547,13 +575,106 @@
 
 
 
+
+        -- create pseudo samples from the class resitances
+        create function "updateResistanceSampleByResistanceClass"() returns trigger as $$
+            declare "sub" "infect"."substance";
+            declare "com" "infect"."compound";
+            begin
+
+                -- delete old stuff
+                if TG_OP = 'DELETE' or TG_OP = 'UPDATE' then
+                    delete
+                      from "infect"."resistanceSample"
+                     where "dataSourceId" like ('%' || OLD."id_bacteria" || ':' || OLD."id_substanceClass" || '-')
+                       and "id_dataSource" = (
+                            select "id"
+                              from "infect"."dataSource"
+                             where "identifier" = 'classDefaultValue'
+                           );
+                end if;
+
+
+                -- add new stuff
+                if TG_OP = 'INSERT' or TG_OP = 'UPDATE' then
+                    for "sub" in select s.*
+                                   from "infect"."substance" s
+                                   join "infect"."substance_substanceClass" ssc
+                                     on s."id" = ssc."id_substance"
+                                   join "infect"."substanceClass" sc
+                                     on ssc."id_substanceClass" = sc."id"
+                                  where sc."id" = NEW."id_substanceClass"
+                    loop
+                        for "com" in select c.*
+                                       from "infect"."compound" c
+                                       join "infect"."substance_compound" "scom"
+                                         on c."id" = "scom"."id_compound"
+                                      where "scom"."id_substance" = "sub"."id"
+                        loop
+                            insert into "infect"."resistanceSample" ("id_bacteria", "id_compound", "id_dataSource", "id_resistanceLevel", "sampleYear", "dataSourceId") values (
+                                  NEW."id_bacteria"
+                                , com.id
+                                , (select "id" from "infect"."dataSource" where "identifier" = 'classDefaultValue')
+                                , NEW."id_resistanceLevel"
+                                , date_part('year', current_timestamp)
+                                , (NEW."id_bacteria" || ':' || NEW."id_substanceClass" || '-' || "sub"."id" || '-' || "com"."id")
+                            );
+                        end loop;
+                    end loop;
+
+                    return NEW;
+                end if;
+
+                if TG_OP = 'DELETE' then
+                    return OLD;
+                end if;
+            end;
+        $$ language plpgsql;
+
+
+        create trigger "updateResistanceSampleByResistanceClass"
+            after insert or update or delete on "classResistance"
+            for each row execute procedure "updateResistanceSampleByResistanceClass"();
+
+
+
+
+        -- create pseudo samples from the class resitances
+        create function "updateResistanceSampleByTruncateResistanceClass"() returns trigger as $$
+            begin
+
+                -- delete old stuff
+                if TG_OP = 'TRUNCATE' then
+                    delete
+                      from "infect"."resistanceSample"
+                     where "id_dataSource" = (
+                            select "id"
+                              from "infect"."dataSource"
+                             where "identifier" = 'classDefaultValue'
+                           );
+                end if;
+
+                return null;
+            end;
+        $$ language plpgsql;
+
+
+        create trigger "updateResistanceSampleByTruncateResistanceClass"
+            after truncate on "classResistance"
+            for each statement execute procedure "updateResistanceSampleByTruncateResistanceClass"();
+
+
+
+
+
+
         create table "resistanceSample" (
               "id" bigserial not null
             , "id_bacteria" int not null
             , "id_compound" int not null
             , "id_dataSource" int not null
-            , "id_sex" int not null
             , "id_resistanceLevel" int not null
+            , "id_sex" int
             , "id_tenant" int
             , "id_region" int
             , "id_city" int
@@ -589,6 +710,11 @@
                 references "dataSource" ("id")
                 on update cascade
                 on delete restrict
+            , constraint "resistanceSample_fk_resistanceLevel"
+                foreign key ("id_resistanceLevel")
+                references "resistanceLevel" ("id")
+                on update cascade
+                on delete restrict
             , constraint "resistanceSample_fk_sex"
                 foreign key ("id_sex")
                 references "sex" ("id")
@@ -619,19 +745,24 @@
                 references "organGroup" ("id")
                 on update cascade
                 on delete restrict
-            , check (("id_region" is null and "id_city" is not null) or ("id_organ" is not null and "id_city" is null))
-            , check (("id_organ" is null and "id_organGroup" is not null) or ("id_region" is not null and "id_organGroup" is null))
+            , check (("id_region" is null and "id_city" is not null) or ("id_organ" is not null and "id_city" is null) or ("id_organ" is null and "id_city" is null))
+            , check (("id_organ" is null and "id_organGroup" is not null) or ("id_region" is not null and "id_organGroup" is null) or ("id_region" is null and "id_organGroup" is null))
             , check ("patientAge" is null or ("patientAge" > -1 and "patientAge" < 150))
         );
 
 
+        create index on "resistanceSample" ("dataSourceId");
+        create index on "resistanceSample" ("sampleDate");
+        create index on "resistanceSample" ("sampleYear");
+        create index on "resistanceSample" ("resistanceValue");
+        create index on "resistanceSample" ("patientAge");
 
         -- make sure the resistance level is set correctly
         create function "checkResistanceSampleLevel"() returns trigger as $$
-            declare "level" "resistanceLevel";
+            declare "level" "infect"."resistanceLevel";
             begin
                 if NEW."resistanceValue" is not null then
-                    select * into "level" from "resistanceLevel" where "id" = NEW."id_resistanceLevel";
+                    select * into "level" from "infect"."resistanceLevel" where "id" = NEW."id_resistanceLevel";
                     if "level"."identifier" != 'custom' then
                         raise exception 'Cannot set resistanceValue while the resistanceLevel is not set to "custom"!';
                     end if;
@@ -714,9 +845,9 @@
             , "created" timestamp without time zone not null default now()
             , "updated" timestamp without time zone not null default now()
             , "deleted" timestamp without time zone
-            , constraint "topic_pk"
+            , constraint "diagnosis_pk"
                 primary key ("id")
-            , constraint "topic_unique_identifer"
+            , constraint "diagnosis_unique_identifer"
                 unique ("identifier")
             , constraint "diagnosis_fk_country"
                 foreign key ("id_country")
@@ -845,7 +976,7 @@
               "id_therapy" int not null
             , "id_compound" int not null
             , constraint "therapy_compounds_pk"
-                primary key ("id_therapy", "id_bacteria")
+                primary key ("id_therapy", "id_compound")
             , constraint "therapy_compounds_fk_therapy"
                 foreign key ("id_therapy")
                 references "therapy" ("id")
