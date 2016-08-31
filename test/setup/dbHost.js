@@ -1,1 +1,0 @@
-console.log(require(require('./getConfigPath')).db[0].hosts[0].host);
