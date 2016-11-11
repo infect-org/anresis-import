@@ -15,6 +15,29 @@
 
 
 
+
+        getReadbaleStream() {
+            const stream = fs.createReadStream(this.path);
+            stream.pause();
+            return stream;
+        }
+
+
+
+
+
+
+
+        getWritableStream() {
+            const stream = fs.createWriteStream(this.path);
+            return stream;
+        }
+
+
+
+
+
+
         delete() {
             return new Promise((resolve, reject) => {
                 fs.unlink(this.path, (err) => {

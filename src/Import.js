@@ -5,6 +5,7 @@
     const FileSystemDownload = require('./download/FileSystemDownload');
     const HTTPDownload = require('./download/HTTPDownload');
     const AnresisConversion = require('./conversion/AnresisConversion');
+    const RValidation = require('./validation/RValidation');
     const config = require('../config.js');
     const log = require('ee-log');
 
@@ -17,6 +18,7 @@
         constructor() {
             config.dataSource.tempDirectory = config.tempDirectory;
             config.dataConversion.tempDirectory = config.tempDirectory;
+            config.dataValidation.tempDirectory = config.tempDirectory;
 
 
             log.info('Starting import ...');
@@ -24,15 +26,46 @@
             this.download().then((binaryFile) => {
                 return this.convert(binaryFile);
             }).then((sampleStream) => {
-
-                return sampleStream.read(100).then((samples) => {
-                    log(samples);
-                    log.success('import ok!');
-
-                    sampleStream.close();
-                });
+                return this.validate(sampleStream);
+            }).then(() => {
+                log.success('import ok!');
             }).catch(log);
         }
+
+
+
+
+
+
+
+
+
+
+
+        /**
+         * validate the data
+         */
+        validate(sampleStream) {
+            log.info('Starting validation ...');
+            let validation;
+
+            switch (config.dataValidation.type) {
+                case 'r':
+                    validation = new RValidation(config.dataValidation);
+                    break;
+
+                default:
+                    throw new Error(`Unknown conversion ${config.dataValidation.type}!`);
+            }
+
+
+            return validation.validate(sampleStream).catch((err) => { log(err);
+                return Promise.reject(new Error(`Failed to validate samples: ${err.message} ...`));
+            });
+        }
+
+
+
 
 
 

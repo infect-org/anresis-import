@@ -80,7 +80,7 @@
                         , reject: reject
                         , numSamples: numSamples
                     });
-                } else return this.readNextSampleSet(numSamples);
+                } else this.readNextSampleSet(numSamples).then(resolve).catch(reject);
             });
         }
 
@@ -95,12 +95,11 @@
             else {
                 this.ready = false;
 
-                const filer = {};
+                const filter = {};
 
                 if (this.offset) filter.uniqueId = this.db.getORM().gt(this.offset);
 
-                return this.db.resistance('*', filer).order('uniqueId').limit(numSamples).raw().find().then((samples) => {
-
+                return this.db.resistance('*', filter).order('uniqueId').limit(numSamples).raw().find().then((samples) => {
 
                     // convert
                     const newSamples = samples.map((sample) => {
@@ -122,12 +121,10 @@
                     });
 
                     // store offset
-                    if (newSamples.length) this.offset = newSamples[newSamples.length-1].uniqueId;
+                    if (newSamples.length) this.offset = newSamples[newSamples.length-1].id;
+                    else this.finished = true;
 
-
-                    process.nextTick(() => {
-                        this.executeQueue();
-                    });
+                    this.ready = true;
 
                     return Promise.resolve(newSamples);
                 });
@@ -156,7 +153,6 @@
                 });
             }
             else {
-
                 this.ready = true;
                 return Promise.resolve();
             }

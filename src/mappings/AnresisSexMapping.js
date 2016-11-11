@@ -17,6 +17,7 @@
 
             this.map.set('f', 'female');
             this.map.set('m', 'male');
+            this.map.set('u', 'unknown');
         }
     };
 })();

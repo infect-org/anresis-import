@@ -81,7 +81,7 @@ log(err);
             let idSQL = '';
 
             idSQL += `ALTER TABLE ${table} ADD COLUMN uniqueId varchar(40);`;
-            idSQL += `CREATE INDEX idx_uniqueID on ${table}(uniqueId);`;
+            idSQL += `CREATE UNIQUE INDEX idx_uniqueID on ${table}(uniqueId);`;
             idSQL += `SET SQL_SAFE_UPDATES = 0;`;
             idSQL += `UPDATE ${table} set uniqueId = SHA1(concat(lab_id, sample_id, COALESCE(mo_occurrence_number, ''), mo_name, mo_specname, ab_name, ab_clsname));`;
             idSQL += `SET SQL_SAFE_UPDATES = 1;`;
