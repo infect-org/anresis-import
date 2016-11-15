@@ -47,7 +47,6 @@
                 const stream = new AnresisSampleStream(this.options);
                 return Promise.resolve(stream);
             }).catch((err) => {
-log(err);
                 return binaryFile.delete().then(() => {
                     return Promise.reject(err);
                 });

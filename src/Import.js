@@ -2,12 +2,13 @@
     'use strict';
 
 
-    const FileSystemDownload = require('./download/FileSystemDownload');
-    const HTTPDownload = require('./download/HTTPDownload');
-    const AnresisConversion = require('./conversion/AnresisConversion');
-    const RValidation = require('./validation/RValidation');
-    const config = require('../config.js');
-    const log = require('ee-log');
+    const FileSystemDownload    = require('./download/FileSystemDownload');
+    const HTTPDownload          = require('./download/HTTPDownload');
+    const AnresisConversion     = require('./conversion/AnresisConversion');
+    const RValidation           = require('./validation/RValidation');
+    const InfectDBWriteStream   = require('./stream/InfectDBWriteStream');
+    const config                = require('../config.js');
+    const log                   = require('ee-log');
 
 
 
@@ -22,15 +23,42 @@
 
 
             log.info('Starting import ...');
-
             this.download().then((binaryFile) => {
                 return this.convert(binaryFile);
             }).then((sampleStream) => {
                 return this.validate(sampleStream);
+            }).then((sampleStream) => {
+                return this.store(sampleStream);
             }).then(() => {
                 log.success('import ok!');
             }).catch(log);
         }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        store(sampleStream) {
+            const stream = new InfectDBWriteStream(config.db);
+            return stream.import(sampleStream);
+        }
+
+
+
+
+
+
+
 
 
 

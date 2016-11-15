@@ -16,7 +16,8 @@
             super(path);
 
             this.stream = csv.createWriteStream({
-                headers: true
+                  headers: true
+                , quoteColumns: true
             });
 
             // pipe to fs
@@ -45,10 +46,9 @@
         end() {
             return new Promise((resolve, reject) => {
                 this.fsStream.on('finish', resolve);
+
+                this.stream.end();
             });
-
-
-            this.stream.end();
         }
     };
 })();

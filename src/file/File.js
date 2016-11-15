@@ -18,7 +18,7 @@
 
         getReadbaleStream() {
             const stream = fs.createReadStream(this.path);
-            stream.pause();
+            //stream.pause();
             return stream;
         }
 
