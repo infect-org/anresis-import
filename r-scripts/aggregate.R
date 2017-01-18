@@ -13,6 +13,7 @@
 
 # if packages foreign and data.table are not installed yet, use below code to install:
 # install.packages("foreign")
+# install.packages("data.table", type = "source", repos = "http://Rdatatable.github.io/data.table")
 
 
 

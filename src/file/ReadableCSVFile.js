@@ -31,6 +31,10 @@
             // pipe to fs
             this.fsStream = this.getReadbaleStream();
             this.fsStream.pipe(this.stream);
+
+
+            // trigegr reading of the stream
+            this.stream.on('readable', () => {});
         }
 
 
@@ -38,8 +42,6 @@
 
 
         read(numRecords) {
-            // trigegr reading of the stream
-            this.stream.on('readable', () => {});
 
             return new Promise((resolve, reject) => {
                 const records = this.cachedRecords;
@@ -62,7 +64,7 @@
                         else {
                             if (this.stream.isPaused()) this.stream.resume();
                             if (this.fsStream.isPaused()) this.fsStream.resume();
-                            setTimeout(read, 100);
+                            setTimeout(read, 50);
                         }
                     };
 

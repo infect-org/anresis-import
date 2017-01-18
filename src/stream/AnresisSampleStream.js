@@ -36,6 +36,11 @@
             this.queue = [];
 
 
+
+            // storage for susbstanceClass compund mapping
+            this.compundMapping = new Map();
+
+
             // set up db
             new Related([{
                   database      : options.databaseName
@@ -52,7 +57,23 @@
                 this.db = db[options.databaseName];
 
 
-                this.executeQueue();
+                return new Related([{
+                      database      : options.target.databaseName
+                    , schema        : options.target.databaseName
+                    , type          : 'postgres'
+                    , hosts: [{
+                          host      : options.target.host
+                        , username  : options.target.user
+                        , password  : options.target.pass
+                        , port      : options.target.port
+                        , pools     : ['master', 'read', 'write']
+                    }]
+                }]).load().then((db) => {
+                    this.targetDb = db[options.target.databaseName];
+
+
+                    this.executeQueue();
+                });
             }).catch((err) => {
                 this.error = err;
                 this.finished = true;
@@ -101,32 +122,135 @@
 
                 return this.db.resistance('*', filter).order('uniqueId').limit(numSamples).raw().find().then((samples) => {
 
-                    // convert
-                    const newSamples = samples.map((sample) => {
-                        return new Sample({
-                              id                : sample.uniqueId
-                            , year              : sample.sample_year
-                            , sex               : this.mappings.sex.resolve(sample.uniqueId, sample.sex)
-                            , age               : sample.age
-                            , bacteria          : this.mappings.bacteria.resolve(sample.uniqueId, sample.mo_name)
-                            , compound          : this.mappings.compound.resolve(sample.uniqueId, sample.ab_name)
-                            , region            : this.mappings.region.resolve(sample.uniqueId, sample.region)
-                            , organGroup        : this.mappings.organGroup.resolve(sample.uniqueId, sample.org_name)
-                            , organ             : this.mappings.organ.resolve(sample.uniqueId, sample.org_name)
-                            , causedInfection   : !!sample.is_infection
-                            , isHospitalized    : !!sample.is_hospitalized
-                            , isNosocomial      : !!sample.is_possibly_nosocomial
-                            , resistanceLevel   : this.mappings.resistanceLevel.resolve(sample.uniqueId, sample.resistant, sample.intermediate, sample.susceptible)
-                        });
+                    const newSamples = [];
+                   /*const origSamples = [];
+                    const createdSamples = [];*/
+
+
+
+                    return Promise.all(samples.map((sample) => {
+                        //sample.testId = Math.random()*10000000;
+
+                        const ourClass = this.mappings.substanceClass.resolve(sample.uniqueId, sample.ab_name);
+                        const ourCompound = this.mappings.compound.resolve(sample.uniqueId, sample.ab_name);
+                        const ourBacteria = this.mappings.bacteria.resolve(sample.uniqueId, sample.mo_name);
+
+
+                        // we need to know the data on our side
+                        if (ourBacteria && (ourCompound || ourClass)) {
+                            return Promise.resolve().then(() => {
+                                if (ourClass) {
+
+                                    return Promise.resolve().then(() => {
+                                        if (this.compundMapping.has(ourClass)) return Promise.resolve(this.compundMapping.get(ourClass));
+                                        else {
+                                            return this.targetDb.substanceClass('*', {
+                                                identifier: ourClass
+                                            }).findOne().then((cls) => {
+                                                if (cls) {
+                                                    const classes = [cls];
+
+                                                    return this.targetDb.substanceClass({
+                                                          left      : Related.gte(cls.left)
+                                                        , right     : Related.lte(cls.right)
+                                                    }).raw().find().then((childClasses) => {
+                                                        childClasses.forEach(c => classes.push(c));
+
+
+                                                        // so, there we go
+                                                        return this.targetDb.compound('identifier').getSubstance().getSubstanceClass({
+                                                            id: Related.in(classes.map(c => c.id))
+                                                        }).raw().find().then((compounds) => {
+                                                            this.compundMapping.set(ourClass, compounds);
+
+                                                            return Promise.resolve(compounds);
+                                                        });
+                                                    });
+
+                                                } else {
+                                                    this.compundMapping.set(ourClass, [])
+                                                    return Promise.resolve();
+                                                }
+                                            });
+                                        }
+                                    }).then((compunds) => {
+                                        if (compunds) {
+                                            compunds.forEach((compound) => {
+
+                                                // ATTENTION: dear michael, you have to think about a unique id 
+                                                // that is really unique! this one is not unique at all
+                                                const newSample = new Sample({
+                                                      id                : sample.uniqueId
+                                                    , year              : sample.sample_year
+                                                    , sex               : this.mappings.sex.resolve(sample.uniqueId, sample.sex)
+                                                    , age               : sample.age
+                                                    , bacteria          : ourBacteria
+                                                    , compound          : compound.identifier
+                                                    , region            : this.mappings.region.resolve(sample.uniqueId, sample.region)
+                                                    , organGroup        : this.mappings.organGroup.resolve(sample.uniqueId, sample.org_name)
+                                                    , organ             : this.mappings.organ.resolve(sample.uniqueId, sample.org_name)
+                                                    , causedInfection   : !!sample.is_infection
+                                                    , isHospitalized    : !!sample.is_hospitalized
+                                                    , isNosocomial      : !!sample.is_possibly_nosocomial
+                                                    , resistanceLevel   : this.mappings.resistanceLevel.resolve(sample.uniqueId, sample.resistant, sample.intermediate, sample.susceptible)
+                                                });
+
+                                              /*  newSample.testId = sample.testId;
+                                                createdSamples.push(newSample);*/
+                                                newSamples.push(newSample);
+                                            });
+                                        }
+
+                                        return Promise.resolve();
+                                    });
+                                } else return Promise.resolve();
+                            }).then(() => {
+                                if (ourCompound) {
+                                    const newSample = new Sample({
+                                          id                : sample.uniqueId
+                                        , year              : sample.sample_year
+                                        , sex               : this.mappings.sex.resolve(sample.uniqueId, sample.sex)
+                                        , age               : sample.age
+                                        , bacteria          : ourBacteria
+                                        , compound          : ourCompound
+                                        , region            : this.mappings.region.resolve(sample.uniqueId, sample.region)
+                                        , organGroup        : this.mappings.organGroup.resolve(sample.uniqueId, sample.org_name)
+                                        , organ             : this.mappings.organ.resolve(sample.uniqueId, sample.org_name)
+                                        , causedInfection   : !!sample.is_infection
+                                        , isHospitalized    : !!sample.is_hospitalized
+                                        , isNosocomial      : !!sample.is_possibly_nosocomial
+                                        , resistanceLevel   : this.mappings.resistanceLevel.resolve(sample.uniqueId, sample.resistant, sample.intermediate, sample.susceptible)
+                                    })
+/*
+                                    newSample.testId = sample.testId;
+                                    newSample.sample = sample;
+                                    origSamples.push(newSample);*/
+                                    newSamples.push(newSample);
+                                }
+
+                                return Promise.resolve();
+                            });
+                        } else return Promise.resolve();
+                        
+                    })).then(() => {
+                        /*const fs = require('fs');
+
+                        origSamples.sort((a, b) => a.testId > b.testId ? 1 : -1);
+                        createdSamples.sort((a, b) => a.testId > b.testId ? 1 : -1);
+
+                        fs.writeFileSync('/home/ee/origSamples.json', JSON.stringify(origSamples, null, 4));
+                        fs.writeFileSync('/home/ee/createdSamples.json', JSON.stringify(createdSamples, null, 4));
+                        fs.writeFileSync('/home/ee/anresisSamples.json', JSON.stringify(samples, null, 4));
+                        log.success('done');*/
+
+                        // store offset
+                        if (newSamples.length) this.offset = newSamples[newSamples.length-1].id;
+                        else this.finished = true;
+
+                        this.ready = true;
+
+                        return Promise.resolve(newSamples);
                     });
-
-                    // store offset
-                    if (newSamples.length) this.offset = newSamples[newSamples.length-1].id;
-                    else this.finished = true;
-
-                    this.ready = true;
-
-                    return Promise.resolve(newSamples);
                 });
             }
         }
@@ -142,7 +266,6 @@
                 const item = this.queue.shift();
 
                 return this.readNextSampleSet(item.numSamples).then((samples) => {
-
                     item.resolve(samples);
                     return this.executeQueue();
                 }).catch((err) => {

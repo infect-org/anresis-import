@@ -4,7 +4,7 @@ imports data obtained from a denormalized mysql database into the normalized
 data structure of the infect application
 
 
-
+ --max-old-space-size=6144
 
 
 # import process

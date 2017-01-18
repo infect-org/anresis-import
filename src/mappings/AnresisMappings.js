@@ -9,6 +9,7 @@
     const AnresisOrganMapping = require('./AnresisOrganMapping');
     const AnresisRegionMapping = require('./AnresisRegionMapping');
     const AnresisResistanceLevelMapping = require('./AnresisResistanceLevelMapping');
+    const AnresisSubstanceClassMapping = require('./AnresisSubstanceClassMapping');
 
 
 
@@ -23,6 +24,7 @@
             this.organ = new AnresisOrganMapping();
             this.region = new AnresisRegionMapping();
             this.resistanceLevel = new AnresisResistanceLevelMapping();
+            this.substanceClass = new AnresisSubstanceClassMapping();
         }
 
 
@@ -36,6 +38,7 @@
             this.organ.printMisses();
             this.region.printMisses();
             this.resistanceLevel.printMisses();
+            this.substanceClass.printMisses();
         }
     };
 })();

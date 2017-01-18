@@ -24,7 +24,7 @@
             log.info(`Starting validation ...`);
 
 
-            this.outFilePath = '/home/ee/60e1ecbeb744b9fdc3a7672f86d76d0cb9179e442a90ea2c717a32548ff676d1'; // path.join(this.options.tempDirectory, crypto.randomBytes(32).toString('hex'));
+            this.outFilePath = path.join(this.options.tempDirectory, crypto.randomBytes(32).toString('hex'));
             this.inFilePath = path.join(this.options.tempDirectory, crypto.randomBytes(32).toString('hex'));
             this.rScriptPath = path.join(__dirname, '../../r-scripts/import.R');
 
@@ -93,22 +93,26 @@
 
 
 
-        createCSV(sampleStream) { return Promise.resolve();
+        createCSV(sampleStream) { //return Promise.resolve();
             this.outCSV = new WritableCSVFile(this.outFilePath);
 
             log.debug(`storing samples in ${this.outFilePath} ...`);
 
             const saveRecords = (offset) => {
-                return sampleStream.read(10000).then((samples) => {
+                return sampleStream.read(7000).then((samples) => {
                     if (samples.length) {
-                        log.debug(`writing 100 samples, starting at offset ${samples && samples.length ? samples[0].id : '[finished]'}, ${offset} ...`);
+                        log.debug(`writing ${samples ? samples.length : 0} samples, starting at offset ${samples && samples.length ? samples[0].id : '[finished]'}, ${offset} ...`);
 
 
                         // store smaples with valid values
                         return this.outCSV.write(samples.filter((sample) => {
                             return sample.bacteria && sample.compound;
                         })).then(() => {
-                            return saveRecords(offset+10000);
+                            return new Promise((resolve, reject) => {
+                                setTimeout(() => {
+                                    saveRecords(offset+7000).then(resolve).catch(reject);
+                                }, 50);
+                            });
                         });
                     }
                     else {

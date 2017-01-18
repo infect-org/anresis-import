@@ -66,11 +66,11 @@
         importRecord(record) {
 
             // check if the record is already in the db
-            return this.db.resistanceSample({
+           /* return this.db.resistanceSample({
                   dataSource        : this.db.dataSource({identifier: 'anresis-search'})
                 , dataSourceId      : record.id
             }).findOne().then((exisintRecord) => {
-                if (!exisintRecord) {
+                if (!exisintRecord) {*/
                     return new this.db.resistanceSample({
                           bacteria          : this.db.bacteria().getSpecies({identifier: record.bacteria})
                         , compound          : this.db.compound({identifier: record.compound})
@@ -93,8 +93,8 @@
                     }).save().catch(() => {
                         return Promise.resolve();
                     });
-                }
-            });
+           //     }
+           // });
         }
     }
 })();
